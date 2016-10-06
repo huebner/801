@@ -13,6 +13,8 @@ library(ggthemes)
 library(extrafont)
 library(graphics)
 
+library(car)
+
 library(xtable)
 ```
 
@@ -149,4 +151,33 @@ par(mfrow=c(2,2))
 plot(lm(lambs$wtgain ~ factor(lambs$diet)))
 par(mfrow=c(1,1))
 dev.off()
+```
+
+```{r modelcheck}
+par(mfrow=c(2,2), cex=0.8)
+plot(etch.rate.aov)
+par(mfrow=c(1,1))
+
+# for a subset of predictors use individual plots
+plot(fitted(etch.rate.aov), residuals(etch.rate.aov))  #residuals
+qqnorm(residuals(etch.rate.aov)); qqline(residuals(etch.rate.aov))  #normal qq-plot   
+
+durbinWatsonTest(etch.rate.aov)  #test for independence of residuals
+bartlett.test(rate~RF,data=etch.rate)  #test for homoscedasticity (constant variance)
+leveneTest(etch.rate.aov)   #test for homogeneity of variances
+
+shapiro.test(etch.rate$rate[etch.rate$RF==160])  #normality in subgroups
+
+shapiro.test(etch.rate$rate)  
+```
+
+
+```{r comparison}
+#comparison of treatment means
+pairwise.t.test(etch.rate$rate,etch.rate$RF,p.adjust.method="bonferroni") 
+pairwise.t.test(etch.rate$rate,etch.rate$RF,p.adjust.method="hochberg")
+
+#taking into account inflation of type I error
+TukeyHSD(etch.rate.aov) 
+plot(TukeyHSD(etch.rate.aov),las=1)
 ```
