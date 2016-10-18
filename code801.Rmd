@@ -146,11 +146,11 @@ lambs<-data.frame(lambs)
 Plots
 ```{r lampbsplots}
  stripchart(lambs$wtgain~lambs$diet, vert=T, pch=16)
-pdf(file="~/Desktop/Teaching/801/Lectures/Anova_Chap3/lambs_diagnostics.pdf")
+#pdf(file="~/Desktop/Teaching/801/Lectures/Anova_Chap3/lambs_diagnostics.pdf")
 par(mfrow=c(2,2))
 plot(lm(lambs$wtgain ~ factor(lambs$diet)))
 par(mfrow=c(1,1))
-dev.off()
+#dev.off()
 ```
 
 ```{r modelcheck}
@@ -172,6 +172,38 @@ shapiro.test(etch.rate$rate)
 ```
 
 
+
+**Power and sample size for ANOVA models**
+```{r power}
+
+grp.means <- c(575,600,650,675) 
+power.anova.test(groups=4,between.var=var(grp.means),within.var=25^2,
+sig.level=.01,power=.90)
+
+
+#operating characteristic curve (OCC) = plot power against a parameter
+# here a=4, 
+# how does sd and sample size influence power?
+
+sd <- seq(20,80,by=2)
+nn <- seq(4,20,by=2)
+beta <- matrix(NA,nr=length(sd),nc=length(nn))
+
+for (i in 1:length(sd))
+      beta[i,] <- power.anova.test(groups=4,n=nn,between.var=var(grp.means),
+                  within.var=sd[i]^2,sig.level=.01)$power 
+
+colnames(beta) <- nn; 
+rownames(beta) <- sd
+
+matplot(sd,beta,type="l",xlab=expression(sigma),ylab=expression(1-beta),col=1, lty=1)
+  grid()
+text(rep(80,10),beta[length(sd),],as.character(nn),pos=3) 
+title("Operating Characteristic Curve\n for a=4 treatment means")
+```
+
+**Multiple Comparisons**
+
 ```{r comparison}
 #comparison of treatment means
 pairwise.t.test(etch.rate$rate,etch.rate$RF,p.adjust.method="bonferroni") 
@@ -181,3 +213,7 @@ pairwise.t.test(etch.rate$rate,etch.rate$RF,p.adjust.method="hochberg")
 TukeyHSD(etch.rate.aov) 
 plot(TukeyHSD(etch.rate.aov),las=1)
 ```
+
+
+
+
