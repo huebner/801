@@ -215,5 +215,187 @@ plot(TukeyHSD(etch.rate.aov),las=1)
 ```
 
 
+Tensile strength and cotton weight percent (problem 3.10 and 3.11 Montogomery)
+```{r cotton}
+cotton<-c(15, 20,25,30,35,15,20,25,30,35,15,20,25,30,35,15,20,25,30,35,15,20,25,30,35)
+tensile<-c(7,12,14,19,7,7,17,19,25,10,15,12,19,22,11,11,18,18,19,15,9,18,18,23,11)
+cloth<-data.frame(cotton=factor(cotton), tensile=tensile)
+
+# 1. calculate group means
+cloth.means<-tapply(cloth$tensile, cloth$cotton, mean)
+cloth.means
+
+nn<-tapply(cloth$tensile, cloth$cotton, length)
+
+# 2. ANOVA model
+cloth.aov<-aov(tensile ~ cotton, cloth)
+summary(cloth.aov, intercept=T)
+
+# 3. Pairwise test of mean differences
+pairwise.t.test(cloth$tensile, cloth$cotton, p.adjust="none", pool.sd=T)
+
+# 4. Tukey test on all possible pairs
+TukeyHSD(cloth.aov, conf.level=0.95)
+plot(TukeyHSD(cloth.aov, conf.level=0.95))
+
+# 5. Tukey method step-by-step
+       # from ANOVA table
+ntrt<-5        # number of treatments
+dferror<-20    # N-a
+mserror<-8.06  # MSE residuals
+contrastcoef<-c(-1,0,0,1,0)  #contrast (30% cotton as control)
+meandiff<-sum(contrastcoef*cloth.means); meandiff  #difference in means
+sediff<-sqrt( (mserror/2)* sum( (1/nn)*abs(contrastcoef)) ); sediff #standard error of the difference
+
+critq<-meandiff/sediff
+qtukey(0.95, ntrt, dferror)  #studentized range distribution quantile
+# 95% confidence interval for the contrast
+lowci<-meandiff - qtukey(0.95, ntrt, dferror)*sediff
+upci<-meandiff + qtukey(0.95, ntrt, dferror)*sediff
+lowci;upci
+
+# pvalue
+ptukey(meandiff/sediff, ntrt, dferror, lower.tail=F)
 
 
+# 6. Scheffe method step-by-step
+       # from ANOVA table
+ntrt<-5        # number of treatments
+dfnum<- 4      # a-1
+dferror<-20    # N-a
+mserror<-8.06  # MSE residuals
+contrastcoef<-c(-1,0,0,1,0)  #contrast (30% cotton as control)
+meandiff<-sum(contrastcoef*cloth.means); meandiff  #estimated contrast
+sscoef<-sum(contrastcoef*contrastcoef/nn) # sum of squared contrast coefficients
+
+msdiff<-meandiff*meandiff/sscoef    # mean squared for contrast
+Fcontrast<-msdiff/mserror; Fcontrast
+
+critval <- dfnum* qf(0.05, dfnum, dferror, lower.tail=F)  #Scheffe F
+
+lowci<-meandiff - sqrt(critval)*sqrt(mserror*sscoef)
+upci<-meandiff + sqrt(critval)*sqrt(mserror*sscoef)
+lowci; upci
+
+# 7. Dunnett method step-by-step
+
+ntrt<-5        # number of treatments
+dfnum<- 4      # a-1
+dferror<-20    # N-a
+mserror<-8.06  # MSE residuals
+contrastcoef<-c(-1,0,0,1,0)  #contrast (30% cotton as control)
+meandiff<-sum(contrastcoef*cloth.means);   #difference in means
+sediff<-sqrt( (mserror/ntrt)); 
+
+# critical value
+library(nCDunnett)
+# qNCDun(0.95, nu=dferror, rho=(rep(0.5,times=dfnum)), delta=rep(0,times=dfnum), two.sided=F)
+
+critval<-2.65
+
+# 95% confidence interval for the contrast
+lowci<-meandiff - critval*sediff
+upci<-meandiff + critval*sediff
+lowci;upci
+
+```
+
+
+
+## Chapter 4: RCBD - Randomized Complete Block Design
+
+A product developer decides to investigate the effect of four different levels of extrusion pressure on flicks using a RCBD considering batches of resin as blocks.
+
+```{r rcbd}
+y<-c(90.3, 89.2, 98.2, 93.9, 87.4, 97.9,
+92.5, 89.5, 90.6, 94.7, 87.0, 95.8,
+85.5, 90.8, 89.6, 86.2, 88.0, 93.4,
+82.5, 89.5, 85.6, 87.4, 78.9, 90.7)
+psi.labels <- c(8500,8700,8900,9100)
+vasc <- data.frame(psi=gl(4,6,24),batch=gl(6,1,24),y)
+
+boxplot(y~psi, vasc)
+boxplot(y~batch, vasc)
+
+interaction.plot(vasc$psi, vasc$batch, vasc$y,  fun=mean, col=1:6, ylab="mean of y", xlab="PSI")
+
+vasc.aov <- aov(y~batch+psi,vasc)
+summary(vasc.aov)
+```
+
+
+Latin square design: Rocket propellant problem
+```{r latin}
+rocket<-data.frame(y=c(24, 20, 19, 24, 24, 17, 24, 30, 27, 36, 18, 38, 26, 27, 21, 26, 31, 26, 23, 22, 22, 30, 20, 29, 31), batch=rep(1:5, each=5), op=rep(1:5, 5),        
+                   treat=c("A","B","C","D","E",  "B","C","D","E","A", "C", "D","E", "A", "B", "D","E", "A","B","C", "E", "A","B","C","D"))
+ 
+plot(y~op+batch+treat,rocket)
+rocket.lm <- lm(y~factor(op)+factor(batch)+treat,rocket) 
+anova(rocket.lm)
+
+```
+
+BIB: Balanced incomplete block design
+
+In a catalyst experiment the time of reaction for a chemical process is studied as a function of catalyst type administered to four different batches of raw material. These batches are considered as the blocking elements.
+
+```{r bib}
+y <- matrix(c(73,NA,73,75,74,75,75,NA,NA,67,68,72,71,72,NA,75),nc=4) 
+chemproc <- data.frame(rep=as.vector(y),
+treat=factor(rep(1:4,4)),
+batch=factor(rep(1:4,each=4))) 
+
+summary(aov(rep~treat+batch+Error(batch),chemproc))
+anova(lm(rep~batch+treat,chemproc))  #treatment effect adjusted for the blocking factor
+
+# batch effect adjusted for treatment
+summary(aov(rep~treat+batch+Error(treat),chemproc))
+
+#Tukey pairwise differences
+chemproc.lm <- lm(rep~batch+treat,chemproc)
+treat.coef <- chemproc.lm$coef[5:7]
+# effect for catalyst 4 (baseline) is missing, so we add it 
+treat.coef <- c(0,treat.coef)
+pairwise.diff <- outer(treat.coef,treat.coef,"-")
+
+summary(chemproc.lm)
+crit.val <- qtukey(0.95,4,5)
+ic.width <- crit.val*0.6982/sqrt(2)
+xx <- pairwise.diff[lower.tri(pairwise.diff)] 
+plot(xx,1:6,xlab="Pairwise Difference (95% CI)",ylab="",xlim=c(-5,5),pch=19,cex=1.2,axes=F) 
+axis(1,seq(-5,5)) 
+mtext(c("4-1","4-2","4-3","1-2","1-3","2-3"),side=2,at=1:6,line=2,las=2) 
+segments(xx-ic.width,1:6,xx+ic.width,1:6,lwd=2) 
+abline(v=0,lty=2,col="lightgray")
+
+#Does this BIB perform better than a complete randomized design (without blocking)?
+# relative efficiency sigma^2(CRD)/sigma^2 (RCBD)
+
+chemproc.lm.crd <- lm(rep~treat,chemproc) 
+(summary(chemproc.lm.crd)$sig/summary(chemproc.lm)$sig)^2
+#Thus CRD would require 13% more bservations to obtain the same level of precision as the BIB
+
+#interbloc variation
+require(lattice) 
+xyplot(rep~treat|batch,chemproc,
+aspect="xy",xlab="Catalyst",ylab="Response", panel=function(x,y) {
+panel.xyplot(x,y)
+panel.lmline(x,y) })
+
+```
+
+```{r rabbit}
+library(faraway)
+data(rabbit)
+
+summary(aov(gain~treat+block+Error(block),rabbit))
+anova(lm(gain~block+treat,rabbit))
+
+g<- lm(gain~block+treat,rabbit)
+g1<-lm(gain~treat, rabbit)
+
+releff<- (summary(g1)$sig/summary(g)$sig)^2
+
+
+
+```
