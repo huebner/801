@@ -1,7 +1,7 @@
 ---
 title: "Code801"
 author: "Marianne Huebner"
-date: "August 21, 2016"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: word_document
 ---
 
@@ -12,16 +12,23 @@ library(ggplot2)
 library(ggthemes)
 library(extrafont)
 library(graphics)
+library(lattice)
+library(scatterplot3d)
+library(reshape2)
 
 library(car)
+library(alr3)
+library(faraway)
+
+library(lattice)
 
 library(xtable)
 ```
 
 
-*Most code is based on Christophe Lalanne's R Companion to Montgomery's Design and Analysis of Experiements (2005)*
+*Much of this code is based on Christophe Lalanne's R Companion to Montgomery's Design and Analysis of Experiements (2005)*
 
-## Probability distributions
+## Statistical concepts: Probability distributions
 
 For example, for the F distribution the R code format is \tt{df(x, df1, df2, log = FALSE)} where
 \tt{df} gives the density, \tt{pf}  the distribution function, \tt{qf} is 
@@ -288,7 +295,7 @@ meandiff<-sum(contrastcoef*cloth.means);   #difference in means
 sediff<-sqrt( (mserror/ntrt)); 
 
 # critical value
-library(nCDunnett)
+# library(nCDunnett)
 # qNCDun(0.95, nu=dferror, rho=(rep(0.5,times=dfnum)), delta=rep(0,times=dfnum), two.sided=F)
 
 critval<-2.65
@@ -324,7 +331,7 @@ summary(vasc.aov)
 ```
 
 
-Latin square design: Rocket propellant problem
+**Latin square design: Rocket propellant problem**
 ```{r latin}
 rocket<-data.frame(y=c(24, 20, 19, 24, 24, 17, 24, 30, 27, 36, 18, 38, 26, 27, 21, 26, 31, 26, 23, 22, 22, 30, 20, 29, 31), batch=rep(1:5, each=5), op=rep(1:5, 5),        
                    treat=c("A","B","C","D","E",  "B","C","D","E","A", "C", "D","E", "A", "B", "D","E", "A","B","C", "E", "A","B","C","D"))
@@ -335,7 +342,38 @@ anova(rocket.lm)
 
 ```
 
-BIB: Balanced incomplete block design
+
+**Paired t-test is  a special case of an RCBD**
+
+```{r paired}
+## Paired t-test vs RCBD
+
+#The following data are from a matched pairs design
+df<-data.frame(a = c(12.9, 13.5, 12.8, 15.6, 17.2, 19.2, 12.6, 15.3, 14.4, 11.3),
+b = c(12.0, 12.2, 11.2, 13.0, 15.0, 15.8, 12.2, 13.4, 12.9, 11.0))
+
+# testing this as a two-sample t-test (incorrect) or a paired t-test (correct) gives different results
+t.test(df$a,df$b)
+t.test(df$a,df$b, paired=T)
+
+# Recreate this analysis as CRD and RCBD
+y =  c(t(as.matrix(df)))  #response
+f = c("pre", "post")  # treatment levels
+k=length(f)  # number of treatment levels
+n=length(df$a)  # number of blocks
+tm = gl(k, 1, n*k, factor(f))    # paired treatments
+blk = gl(n, k, k*n)    # blocking factor 
+
+# CRD compare to two sample t-test results
+summary(aov(y ~ tm) )
+
+#RCBD compare to paired t-test results
+summary(aov(y ~ tm + blk) )
+
+
+```
+
+**BIB: Balanced incomplete block design**
 
 In a catalyst experiment the time of reaction for a chemical process is studied as a function of catalyst type administered to four different batches of raw material. These batches are considered as the blocking elements.
 
@@ -368,7 +406,7 @@ mtext(c("4-1","4-2","4-3","1-2","1-3","2-3"),side=2,at=1:6,line=2,las=2)
 segments(xx-ic.width,1:6,xx+ic.width,1:6,lwd=2) 
 abline(v=0,lty=2,col="lightgray")
 
-#Does this BIB perform better than a complete randomized design (without blocking)?
+# Does this BIB perform better than a complete randomized design (without blocking)?
 # relative efficiency sigma^2(CRD)/sigma^2 (RCBD)
 
 chemproc.lm.crd <- lm(rep~treat,chemproc) 
@@ -395,7 +433,472 @@ g<- lm(gain~block+treat,rabbit)
 g1<-lm(gain~treat, rabbit)
 
 releff<- (summary(g1)$sig/summary(g)$sig)^2
+```
 
 
+## Chapter 5: Factorial Design
+
+```{r battery}
+#battery <- read.table("~/Desktop/Teaching/801/Lectures/Rcode/Data/battery.txt",header=TRUE) 
+y<-c(130,74,155,180, 150, 159, 188, 126, 138, 168, 110, 160,  34,  80,  40,  75, 136, 106, 122, 115, 174, 150, 120, 139,  20,  82,  70,  58,  25,  58,  70,  45,
+                96,  82, 104,  60)
+x1 <- as.factor(c(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3)) 
+x2 <- as.factor(c(rep(15,12), rep(70,12), rep(125,12))) 
+battery<-data.frame(life=y, material=x1, temperature=x2)
+summary(battery)
+
+#two-way ANOVA including interaction
+battery.aov <- aov(life~material*temperature,data=battery)
+summary(battery.aov)
+
+#interaction plot
+with(battery, interaction.plot(temperature,material,life,type="b",pch=19, fixed=T,xlab="Temperature (◦F)",ylab="Average life"))
+
+# effects plot
+plot.design(life~material*temperature,data=battery)
+```
+From the interaction plot we see that average life decreases as temperature increases, with Material type 3 leading to extended battery life compared to the other, especially at higher temperature.
+
+From the effects plot we see that the large Temperature effect is reflected in the range of battery life variation induced by its manipulation.
+
+```{r batterycomparisons}
+TukeyHSD(battery.aov,which="material")
+
+# BUT interaction is significant! So we need to compute means contrast in presence of a significant interaction.
+# compute the three means at Temperature=70◦F 
+mm <- with(subset(battery, temperature==70),aggregate(life,list(M=material),mean))
+# next the studentized t quantile times the error type (based on pooled SD
+# from ANOVA)
+val.crit <- qtukey(.95,3,27)*sqrt(unlist(summary(battery.aov))[["Mean Sq4"]]/4) # finally compare the observed difference of means with the critical value
+diff.mm <- c(d.3.1=mm$x[3]-mm$x[1],d.3.2=mm$x[3]-mm$x[2],d.2.1=mm$x[2]-mm$x[1])
+names(which(diff.mm > val.crit))
+
+```
+In conclusion, only Material type 3 vs. type 1 and Material type 2 vs. type 1 appear to be significantly different when Temperature is fixed at 70 degrees F.
+
+```{r batteryresiduals}
+
+plot(battery.aov)  # residual plots
+
+
+with(battery, tapply(life,list(material,temperature),var))
+
+```
+
+
+Examining the plot of residuals vs. fitted values, we can see that a larger variance is associated to larger fitted value, and two observations (2 and 4) are highlighted. At 15 degrees F material type 1 contains outliers that account for the the inequality in variance.
+
+
+```{r batteryoutlier}
+summary(battery.aov1 <- aov(life~material*temperature,data=battery, subset=-c(2,4)))
+
+plot(battery.aov1)
+
+with(battery[-c(2,4),], tapply(life,list(material,temperature),var))
+
+with(battery[-c(2,4),], interaction.plot(temperature,material,life,type="b",pch=19, fixed=T,xlab="Temperature (◦F)",ylab="Average life"))
+```
+
+
+
+```{r batterynointeraction}
+# no interactions
+summary(battery.aov2 <- aov(life~material+temperature,data=battery))
+
+# Plot difference between the observed cell means and the estimated cell means assuming no interaction: any pattern is suggestive of the presence of an interaction.
+mm2 <- with(battery, tapply(life,list(material,temperature),mean))
+mm2 <- as.vector(mm2) 
+plot(fitted(battery.aov2)[seq(1,36,by=4)],mm2-fitted(battery.aov2)[seq(1,36,by=4)], xlab="",ylab=expression(bar(y)[ij.]-hat(y)[ijk]), pch=19,axes=FALSE,ylim=c(-30,30)) 
+axis(1,at=seq(0,200,by=50),pos=0) 
+text(155,4, expression(hat(y)[ijk]),pos=4) 
+axis(2,at=seq(-30,30,by=10),las=1)
+# superimpose loess line
+yy <- order(fitted(battery.aov2)[seq(1,36,by=4)])
+xx.fit <- fitted(battery.aov2)[seq(1,36,by=4)]
+yy.fit <- mm2-fitted(battery.aov2)[seq(1,36,by=4)] 
+lines(xx.fit[yy],predict(loess(yy.fit[yy]~xx.fit[yy])),col="lightgray",lwd=2)
+```
+
+There is a tendency toward alternated fitted values differences with increasing predicted values. That means a no interaction model is not appropriate.
+
+**Adding a quadratic term**
+
+Model: $$y \sim A + B + B^2 + AB + AB^2 $$
+
+```{r batteryquadratic}
+# adding a quadratic term for temperature
+battery$temp2 <- as.numeric(as.character(battery$temperature))
+
+
+battery.aov3 <- aov(life~material+temp2+I(temp2^2) +material:temp2+material:I(temp2^2),data=battery) 
+summary(battery.aov3)
+
+```
+
+Is there an optimal temperature that depends on material type where battery life reaches its maximum?
+
+```{r batteryint}
+#interpolate predictions over the range of temperatures
+new <- data.frame(temp2=rep(seq(15,125,by=5),3),material=gl(3,23)) 
+new$fit <- predict(battery.aov3,new)
+
+# we first plot the fitted values
+with(new, interaction.plot(temp2,material,fit,legend=FALSE, xlab="Temperature",ylab="Life",ylim=c(20,190)))
+txt.leg <- paste("Material type",1:3) 
+text(5:7,new$fit[new$temp2==c(45,55,65)]-c(3,3,-20),txt.leg,pos=1) 
+# next the observed values 
+points(rep(c(1,15,23),each=12),battery$life,pch=19)
+
+```
+
+*Contour plot*
+This is plotting fitted values against continous predictor values after interpolation. Since material is not continous, this plot is not usual, but it gives some idea about the influence of material type and temperature on battery life.
+
+```{r batterycontour}
+# require(lattice)
+fit<-lm(life~material+temp2+I(temp2^2) +material:temp2+material:I(temp2^2),data=battery) 
+
+battery.tmp <- data.frame(temp2=rep(seq(15,125,by=5),3),material=gl(3,23)) 
+#tmp <- list(material=tmp$material,temp2=tmp$temp2) 
+#new <- expand.grid(battery.tmp)
+#new$fit <- c(predict(fit,new))
+
+#contourplot(fit~material*temp2,data=new,cuts=8,region=T,col.regions=gray(7:16/16))
+```
+
+*Example: Hormone study*
+An experiment is conducted to study the effect of hormones injected into test rats. There are two distinct hormones, each with two levels: A, a, B, b. Each treatment is applied to six rats with the response being the amount of glycogen (in mg) in the liver.
+
+
+```{r hormone}
+hlevel<-rep(gl(2,6, labels=c("high", "low")),2)
+horm<-gl(2,12, labels=c("A", "B"))
+glyc<-c(106, 101,120, 86,132, 97, 51, 98, 85, 50, 111, 72, 103, 84, 100, 83, 110, 91, 50, 66, 61, 72, 85, 60 )
+rats<-data.frame(hlevel=hlevel, hormone=horm, glyc=glyc)
+
+rats.lm<-lm(glyc~hormone*hlevel, rats)
+anova(rats.lm)
+
+with(rats, tapply(glyc,list(hlevel, hormone),mean))
+
+# interaction plot
+with(rats, interaction.plot(hlevel,hormone,glyc,type="b",pch=19, fixed=T,xlab="Level",ylab="Glycogen"))
+
+residualPlots(rats.lm)
+
+rats.lm2<-lm(glyc~hormone+hlevel, rats)
+anova(rats.lm2)
+
+residualPlots(rats.lm2)
+
+TukeyHSD(aov(glyc~hormone*hlevel, rats))
+
+
+# sample size for power 80%, alpha=0.05
+p1<-(summary(rats.lm)$sigma)^2
+a=2
+b=2
+D=25
+n=4  #n=5
+phiA=sqrt(n*b*D^2/(2*a*p1))
+phiB=sqrt(n*a*D^2/(2*b*p1))
+phiAB=sqrt(n*D^2/(2*((a-1)*(b-1)+1)*p1))
+dfnum=1
+dfE=a*b*(n-1)
+# continue with Table V Appendix Montgomery 
+
+```
+
+
+
+*Example: Winery*
+A grape grower is interested in maximizing the number of bushels per acre on her winery. She limits her study to the combinations of 3 varieties and 4 pesticides (12 combinations). For each combination, two replicates will be obtained. If there is an interaction the grower wants to compare the pesticides for each fixed variety of grape.
+
+```{r winery}
+x1<-rep(1:3, 8)
+x2<-rep(1:4, each=6)
+y<-c(49, 39, 50 , 55 , 43 ,38 , 85, 73, 55, 41, 67, 58 ,53 , 42 , 53, 48, 66, 68, 85,92 ,69 , 62 , 85 , 99)
+wine<-data.frame(bushel=y, variety=x1, pesticide=x2)
+
+with(wine, tapply(bushel,list(variety,pesticide),mean))
+
+wine.lm<-lm(bushel~variety*pesticide, wine)
+summary(wine.lm)
+anova(wine.lm)
+
+#test interaction   library(alr3)
+residualPlots(wine.lm)
+#This includes Tukey's test for nonadditivity when plotting against fitted values.
+
+```
+
+
+**General factorial design**
+
+
+*Example: Hormone study*
+A soft drink bottler is interested in obtaining more uniform fill heights in the bottles produced by his manufacturing process. The process engineer can control three variables during the filling process: the percent carbonation (A), the operating pressure in the filler (B), and the bottles produced per minute on the line speed (C).
+
+$$y \sim A + B + C + AB + AC + BC + ABC$$
+
+```{r bottling}
+bottling <- read.table("~/Desktop/Teaching/801/Lectures/Rcode/data/bottling.txt",header=TRUE, colClasses=c("numeric",rep("factor",3)))
+summary(bottling)
+
+par(mfrow=c(2,2),cex=.8)
+boxplot(Deviation~.,data=bottling,las=2,cex.axis=.8,ylab="Deviation") 
+abline(h=0,lty=2)
+par(las=1)
+mm <- with(bottling, tapply(Deviation,Carbonation,mean))
+ss <- with(bottling, tapply(Deviation,Carbonation,sd))
+bp <- barplot(mm,xlab="Carbonation",ylab="Deviation",ylim=c(-2,9)) 
+arrows(bp,mm-ss/sqrt(4),bp,mm+ss/sqrt(4),code=3,angle=90,length=.1) 
+with(bottling, interaction.plot(Carbonation,Pressure,Deviation,type="b")) 
+with(bottling, interaction.plot(Carbonation,Speed,Deviation,type="b"))
+par(mfrow=c(1,1),cex=1)
+```
+
+Top right panel presents aggregated data on B and C: The means observed, together with their standard errors, are plotted against the three level of Carbonation. The bottom interaction plots displays only two factors at the same time.
+
+```{r bottlingaov}
+summary(bottling.aov <- aov(Deviation~.^3,bottling))
+```
+
+The main effects are significant, while none of the four interaction effects are.
+Remove interaction effects:
+
+```{r bottlingaov2}
+bottling.aov2 <- aov(Deviation~.,bottling) 
+anova(bottling.aov2,bottling.aov)
+```
+
+Since the F-test is not significant, we can assume the interaction terms need not be part of the model.
+
+*Example: Tool life*
+
+The effect of cutting speed (A) and tool angle (B) is studied on the effective life of a cutting tool. This is an example with several continuous factors.
+
+The hierarchical principle means that if a higher order term i sincluded, then teh lower order terms should also be included.
+
+$$y \sim A + B + A^2 + B^2 + AB^2 + A^2B + AB$$
+
+```{r toollife}
+tool <- read.table("~/Desktop/Teaching/801/Lectures/Rcode/Data/toollife.txt",header=TRUE)
+tool.lm <- lm(Life~Angle*Speed+I(Angle^2)*I(Speed^2)+Angle:I(Speed^2)+I(Angle^2):Speed,tool) 
+summary(tool.lm)
+
+#response surface
+tmp.angle <- seq(15,25,by=.1)
+tmp.speed <- seq(125,175,by=.5)
+tmp <- list(Angle=tmp.angle,Speed=tmp.speed) 
+new <- expand.grid(tmp)
+new$fit <- c(predict(tool.lm,new))
+
+contourplot(fit~Angle*Speed,data=new,cuts=8,region=T,col.regions=gray(7:16/16))
+
+```
+
+**Blocking in factorial designs**
+Run a factorial model within each block. Do not consider factor by block interactions.
+
+
+*Example: Intensity*
+Experiment to improve detecting targets on a radar scope. The two factors are the amount of background noise (“ground clutter”) on the scope (3 levels) and the type of filter (2 types) placed over the screen. A blocking factor is operator (availability and knowledge). Hence there are 3x2 treatment combinations.
+
+
+```{r intensity}
+intensity <- read.table("~/Desktop/Teaching/801/Lectures/Rcode/Data/intensity.txt",header=TRUE, colClasses=c("numeric",rep("factor",3)))
+
+xyplot(Intensity~Ground|Operator,data=intensity,groups=Filter,
+panel=function(x,y,...){
+subs <- list(...)$subscripts
+panel.xyplot(x,y,pch=c(1,19),...) 
+panel.superpose(x,y,panel.groups="panel.lmline",lty=c(1,2),...)
+},key=list(text=list(lab=as.character(1:2)),lines=list(lty=1:2,col=1), corner=c(1,.95),title="Filter Type",cex.title=.8),col=1)
+#Note large inter-individual variation with respect to the response variable
+
+
+# intensity.aov <- aov(Intensity~Ground*Filter+Error(Operator),intensity)
+intensity.aov <- aov(Intensity~Operator+Ground*Filter,intensity) 
+summary(intensity.aov)
+
+```
+
+The blocking factor SS is rather large compared to other main effects SS.
+
+
+## Chapter 6: $2^K$ Factorial designs
+
+*Example: Reactant yield*
+The objective is to study how reactant concentration (15 or 25%) and the catalyst (1 or 2 pounds) impact the conversion (yield) in a chemical process, with three replicates.
+
+```{r yield}
+chem <- read.table("~/Desktop/Teaching/801/Lectures/Rcode/Data/yield.txt",header=T)
+
+yield.sums <- aggregate(chem$yield,list(reactant=chem$reactant,catalyst=chem$catalyst),sum)
+yield.sums
+
+summary(aov(yield~reactant*catalyst, chem))
+
+attach(chem)
+reactant.num <- chem$reactant
+levels(reactant.num) <- c(25,15)
+reactant.num <- as.numeric(as.character(reactant.num)) 
+catalyst.num <- chem$catalyst
+levels(catalyst.num) <- c(2,1)
+catalyst.num <- as.numeric(as.character(catalyst.num)) 
+yield.lm <- lm(yield~reactant.num+catalyst.num, chem) 
+yield.lm ## gives the coefficients of the LM
+
+s3d <- scatterplot3d(reactant.num,catalyst.num,chem$yield,type="n", angle=135,scale.y=1,xlab="Reactant",ylab="Catalyst")
+s3d$plane3d(yield.lm,lty.box="solid",col="darkgray")
+
+tmp <- list(reactant.num=seq(15,25,by=.5),catalyst.num=seq(1,2,by=.1)) 
+new.data <- expand.grid(tmp)
+new.data$fit <- predict(yield.lm,new.data) 
+contourplot(fit~reactant.num+catalyst.num,new.data,xlab="Reactant",ylab="Catalyst")
+
+rm(chem)
+```
+
+
+For a first-order model, which includes only the main effects, the response curve is a plane.
+
+
+*Example:  Filtration rate*
+
+A chemical product is produced in a  pressure vessel. Four factors are thought to influence the filtration rate, namely temperature (A), pressure (B), concentration of formaldehyde (C), and stirring rate (D).
+
+```{r filter}
+# response
+y<- c(45, 71, 48, 65, 68, 60, 80, 65, 43, 100, 45, 104, 75, 86, 70, 96)
+
+
+#factor
+A<-gl(n=2, k=1, length=16, labels=c(-1,1), ordered=F)
+B<-gl(n=2, k=2, length=16, labels=c(-1,1), ordered=F)
+C<-gl(n=2, k=4, length=16, labels=c(-1,1), ordered=F)
+D<-gl(n=2, k=8, labels=c(-1,1), ordered=T)
+
+filter.df<-data.frame(A=A, B=B, C=C, D=D, y=y)
+
+filter.aov<-aov(y~A*B*C*D, filter.df)
+filter.aov
+
+
+
+#numeric
+A<-rep(c(-1,1),  len = 16)
+B<-rep(c(-1,1), each = 2, len = 16)
+C<-rep(c(-1,1), each = 4, len = 16)
+D<-rep(c(-1,1), each = 8, len = 16)
+
+# show interactions
+filterdata<-data.frame(y=y, A=A, B=B, C=C, D=D, AB=A*B, AC=A*C, AD=A*D, BC=B*C, BD=B*D, CD=C*D, ABC=A*B*C,ABD=A*B*D, ACD=A*C*D, BCD=B*C*D, ABCD=A*B*C*D)
+filterdata
+
+# regression model to get effects (all other is  NA!)
+filter.lm<-lm(y~A*B*C*D, filterdata); summary(fit)
+
+
+filter.effect<-as.matrix(summary(filter.lm)$coefficients[-1, 1:2])
+factornames<-dimnames(summary(filter.lm)$coefficients[-1, 1:2])[[1]]
+tmp<-data.frame(factors=factornames, estimate=filter.effect[,1], effect=2*filter.effect[,1])
+tmp[order(tmp$effect),]
+```
+
+
+Potentially significant effects: A, AD, C, D, AC
+
+```{r filterinteraction}
+# check interaction
+interaction.plot(filterdata$A, filterdata$C, filterdata$y,  fun=mean, col=1:6, ylab="mean of y", xlab="A")
+
+interaction.plot(filter.df$A, filter.df$C, filter.df$y,  fun=mean, col=1:6, ylab="mean of y", xlab="A")
+
+# ANOVA model involving only A, C, D and their interactions
+fit.aov2<-aov(y~A*C*D, filter.df)
+fit.aov2
+
+# Regression model with A, C, D, AC, and AD
+fit.lm2<-lm(y~A+C+D+AC+AD, filterdata)
+summary(fit.lm2)
+
+contrasts(filter.df$A)
+contrasts(filter.df$C)
+
+X<-model.matrix(fit.lm2); X
+coef <-  solve(t(X)%*%X)%*%t(X)%*%filterdata$y
+coef
+
+
+# model diagnostics
+plot(fit)
+
+# Contourplot 
+# Set D=1 (high level) to maximize response, see >fit 
+
+xx<-as.numeric(fit$coef)
+
+threevar <- function(A,C,D){ 
+ #  xx[1] + xx[2]*A + xx[3]*C +  xx[4]*D -xx[5]*A*C + xx[6]*A*D}
+  70.0625 + 10.812*A + 4.938*C +  7.313*D -9.063*A*C + 8.312*A*D}
+
+mat <- outer( seq(-1, 1, by=0.1),  
+              seq(-1, 1, by=0.1), 
+              Vectorize( function(x,y) threevar(A=x, C=y, D=1) ) )
+
+ contourplot(mat, xlab="A", ylab="C", row.values=seq(-1, 1, by=0.1), column.values=seq(-1, 1, by=0.1))
+
+```
+
+
+*Example:  Plasma*
+
+This is a $2^3$ design used to develop a nitride etch process on a single-wafer plasma etching tool. The design factor are the gap [in cm]  between the electrodes, the gas flow ($C_2 F_6$ is used a the reactant gas), and the RF power [in W] applied to the cathode. Each factor is run at two levels, and the design is replicated twice.
+
+```{r plasma}
+plasma <- read.table("~/Desktop/Teaching/801/Lectures/Rcode/Data/plasma.txt",header=T)
+plasma
+
+# convert to long format with library(reshape2)
+plasma.df<-reshape(plasma, varying=c("R1", "R2"),  idvar = "Run", v.names="etch", direction = "long" )
+
+plasma.df.aov <- aov(etch~A*B*C, data=plasma.df)
+summary(plasma.df.aov)
+
+
+
+```
+
+Factors A, C and their two-way interaction are significant.
+
+The levels of the factors are as follows:
+
+Factor  | Low (-1) | High (+1) |
+---| ---| ---|
+A (gap) | 0.80 | 1.20 |
+B (flow) | 125 | 200 |
+C (power) | 275 | 325 |
+
+
+```{r plasmasurface}
+plasma.num <- plasma.df
+levels(plasma.num$A) <- c(0.8,1.2) 
+levels(plasma.num$C) <- c(275,325)
+plasma.num$A <- as.numeric(as.character(plasma.num$A)) 
+plasma.num$C <- as.numeric(as.character(plasma.num$C)) 
+
+plasma.num.lm <- lm(etch~A*C, plasma.num)
+#require(scatterplot3d)
+# s3d <- scatterplot3d(plasma.num$A,plasma.num$C, plasma.num$etch,type="n", angle=135,scale.y=1,xlab="Gap",ylab="Power") 
+# doesn't work?
+# s3d$plane3d(plasma.num.lm,lty.box="solid",col="darkgray")
+
+tmp <- list(C=seq(275,325,by=1),A=seq(0.8,1.2,by=.1)) 
+new.data <- expand.grid(tmp)
+new.data$fit <- predict(plasma.num.lm, new.data) 
+
+contourplot(fit~A+C,new.data,xlab="gap",ylab="power")
 
 ```
