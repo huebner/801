@@ -15,7 +15,10 @@ library(graphics)
 library(lattice)
 library(scatterplot3d)
 library(reshape2)
+library(lme4)
+library(lsmeans)
 
+library(gplots)
 library(car)
 library(alr3)
 library(faraway)
@@ -221,6 +224,29 @@ TukeyHSD(etch.rate.aov)
 plot(TukeyHSD(etch.rate.aov),las=1)
 ```
 
+*Unbalanced design*
+There are four different package designs for a new breakfast cereal. Each was tested in 5 stores (20 stores total), but one store had a fire and was dropped from the study. Sales [number of cases] were recorded.
+
+```{r sales}
+sales<-c(11, 17, 16, 14, 15,12, 10, 15, 19,11, 23, 20, 18, 17, NA, 27,33,22,26,28)
+trt<-rep(1:4, each=5); trt<-factor(trt)
+sales.df<-data.frame(sales=sales, trt=trt)
+yi=with(sales.df, tapply(sales,list(trt),sum, na.rm=TRUE))
+yibar=with(sales.df, tapply(sales,list(trt),mean, na.rm=TRUE))
+ni=c(5,5,4,5)
+
+sales.aov<-aov(sales~trt); summary(sales.aov)
+
+#manually
+SStrt <- sum(yi^2/ni) - sum(yi)^2/sum(ni)
+SST <- sum(sales^2, na.rm=TRUE) - sum(yi)^2/sum(ni)
+SSE<-SST-SSTrt
+
+# contrasts design3 vs design4
+yibar %*% c(0,0,1,-1)
+
+
+```
 
 Tensile strength and cotton weight percent (problem 3.10 and 3.11 Montogomery)
 ```{r cotton}
@@ -841,7 +867,7 @@ plot(fit)
 xx<-as.numeric(fit$coef)
 
 threevar <- function(A,C,D){ 
- #  xx[1] + xx[2]*A + xx[3]*C +  xx[4]*D -xx[5]*A*C + xx[6]*A*D}
+ #  xx[1] + xx[2]*A + xx[3]*C +  xx[4]*D +xx[5]*A*C + xx[6]*A*D}
   70.0625 + 10.812*A + 4.938*C +  7.313*D -9.063*A*C + 8.312*A*D}
 
 mat <- outer( seq(-1, 1, by=0.1),  
@@ -902,3 +928,139 @@ new.data$fit <- predict(plasma.num.lm, new.data)
 contourplot(fit~A+C,new.data,xlab="gap",ylab="power")
 
 ```
+
+
+
+## Chapter 13: Random effects
+ 
+Montogomery Example 13.1: A gauge is used to measure a critical dimension on a part. In order to investigate the sources of variability 20 parts have been selected from the prodcution process, and three operators measure each part twice.
+
+
+```{r gauge}
+#library(lme4)
+part<-rep(c(1:20),each=6)
+operator<-rep(1:3,each=2)
+resp<-c(
+21,20,20,20,19,21, 24,23,24,24,23,24, 20,21,19,21,20,22,
+27,27,28,26,27,28, 19,18,19,18,18,21, 23,21,24,21,23,22,
+22,21,22,24,22,20, 19,17,18,20,19,18, 24,23,25,23,24,24,
+25,23,26,25,24,25, 21,20,20,20,21,20, 18,19,17,19,18,19,
+23,25,25,25,25,25, 24,24,23,25,24,25, 29,30,30,28,31,30,
+26,26,25,26,25,27, 20,20,19,20,20,20, 19,21,19,19,21,23,
+25,26,25,24,25,25, 19,19,18,17,19,17)
+gauge<-cbind(part,operator,resp);gauge<-data.frame(gauge)
+
+
+#library(car)
+scatterplot(resp~part|operator, data=gauge, boxplots=FALSE, smooth=TRUE, reg.line=FALSE)
+abline(lm(gauge$resp~gauge$part), lwd=3, col="grey")
+fixed.dummy<-lm(resp~part +factor(operator) -1, data=gauge)
+summary(fixed.dummy)
+
+# library(gplots)
+plotmeans(resp~operator, gauge, main="Heterogeneity across operators")
+plotmeans(resp~part, gauge, main="Heterogeneity across parts")
+
+xyplot(gauge$resp~gauge$part|factor(gauge$operator), pch=16, col=4, xlab="part", ylab="response")
+
+# both part and operator are random effects
+gauge.lmer <- lmer(resp ~ (1|part) + (1|operator) , gauge)
+summary(gauge.lmer)
+
+# operator is a  fixed effect, part a random effect
+gauge.lmer2 <- lmer(resp ~ operator+ (1|part)  , gauge)
+summary(gauge.lmer2)
+
+sig2part<-as.vector(VarCorr(gauge.lmer)$part)
+sig2op<-as.vector(VarCorr(gauge.lmer)$operator)
+sig.gauge<-summary(gauge.lmer)$sigma
+
+plot(fitted(gauge.lmer), residuals(gauge.lmer))
+
+
+# fitted values are not sample means! These are "shrinkage estimates" closer to the grand mean
+means=sapply(split(resp, operator), mean)
+operatorfit<-sapply(split(fitted(gauge.lmer), operator), mean)
+data.frame(mean=means, fitted=operatorfit)
+
+```
+
+## Chapter 14: Nested designs
+A company is interested in testing the uniformity of their film-coated pain tablets. A random sample of three batches were collected from each of their two blending sites. Five tablets were assayed from each batch.
+
+```{r tablets}
+site<-gl(n=2, k=3, length=30, labels=c(1,2))
+batch<-gl(n=6, k=1, length=30, labels=1:6)
+y<-c(5.03, 4.64, 5.1, 5.05, 5.46, 4.9,
+     5.1, 4.73, 5.15, 4.96, 5.15, 4.95, 
+     5.25, 4.82, 5.20, 5.12, 5.18, 4.86,
+     4.98, 4.95, 5.08, 5.12, 5.18, 4.86,
+     5.05, 5.06, 5.14, 5.11, 5.11, 5.07)
+tablets<-data.frame(site=site, batch=batch, y=y)
+
+boxplot(y~site)
+boxplot(y~site:batch)
+
+#library(lattice)
+dotplot(y ~ batch | site)
+
+
+#numeric factors
+site<-as.numeric(rep(c(1,2), each=3, len=30))
+batch<-as.numeric(rep(1:6, len=30))
+
+#factorial without interaction
+tablets.lm1 <- lm(y ~ site+batch)
+summary(tablets.lm1)
+anova(tablets.lm1)
+
+# full factorial
+tablets.lm2 <- lm(y ~ site*batch)
+summary(tablets.lm2)
+anova(tablets.lm2)
+
+
+#random batch within site
+tablets.lm3 <- lm(y ~ site + (site|batch))
+summary(tablets.lm3)
+anova(tablets.lm3)
+
+#nested
+tablets.lm4 <- lm(y ~ site/batch )
+summary(tablets.lm4)
+anova(tablets.lm4)
+
+```
+
+Hower the F values should be  MSA/MSB(A) for site (site is fixed)  and  MSB(A)/MSE for batch nested within site.
+
+```{r tabletsmodel}
+cat("F test statistic for site=", 0.02133/0.11338, "p value =", 1-pf(0.02133/0.11338, 1,4))
+
+cat("F test statistic for batch nested within site=", 0.11338/0.01216, "p value =", 1-pf(0.11338/0.01216, 4, 24))
+
+tablets.lmer<-lmer(y ~ site+ (1|batch:site) , tablets)
+summary(tablets.lmer)
+```
+
+$\hat{sigma}^2_\beta= (MS_{B(A)}-MSE)/n = 0.02024$
+
+$\hat{sigma}^2= MSE=0.01216$
+
+So we can conclude that variation due to site can be ignored, but batch varies a lot and sites should be encouraged to reduce the batch-to-batch variation.
+
+
+
+```{r tablets2}
+TukeyHSD(aov(tablets.lm), "site:batch")
+
+# library(lsmeans)
+# same as TukeyHSD
+lsmeans(tablets.lm, pairwise ~ site:batch)
+# this gives unadjusted pvalues
+lsmeans(tablets.lm, pairwise ~ site:batch, adjust="none")
+
+```
+
+## Chapter 15: Repeated measures - separate file
+
