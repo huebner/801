@@ -1062,5 +1062,132 @@ lsmeans(tablets.lm, pairwise ~ site:batch, adjust="none")
 
 ```
 
-## Chapter 15: Repeated measures - separate file
+## Chapter 15: Repeated measures 
+
+In this exercise study  (UCLA wesbsite on epeated measures) people were randomly assigned to two types of diet (low-fat, regular), 
+three types of exercises (at rest, walking, running). 
+Pulse rate was measured at three different time points (1 min, 15 min, 30 min).
+
+```{r exercise}
+exer<-read.csv("~/Desktop/Teaching/801/Lectures/Rcode/Data/exer.csv",header=T)
+
+#FYI transforming data from long to wide format
+#library(reshape2)
+exer.w <- reshape(exer,
+   timevar=c( "time"),
+  idvar = c("id","diet", "exertype"),
+  direction = "wide")
+
+head(exer.w)
+
+
+#FYI transforming data from wide to long format
+exer.l <- reshape(exer.w,
+   timevar=c( "time"),
+   varying=c( "pulse.1", "pulse.2", "pulse.3"),
+   v.names = "pulse",
+   times=1:3,  #this orders the data by ID
+   new.row.names = 1:1000,
+  direction = "long")
+
+head(exer.l)
+
+interaction.plot(exer$time,exer$diet,exer$pulse, 
+ylim=c(90,110),lty=c(1,12),ylab="mean of pulse",
+xlab="time")
+```
+
+Pulse rate of both diet types increase over time; for the regular diet the pulse rate increases more than for the low-fat diet.
+
+```{r exercisemodel1}
+exer$subject<-factor(exer$id, c(1:30))
+diet.aov<-aov(pulse ~diet*time + Error(subject), exer)
+summary(diet.aov)
+
+diet.aov<-aov(pulse ~diet*time + Error(subject), exer)
+summary(diet.aov)
+```
+
+Model 2: group variable=diet
+```{r exercisemodel2}
+interaction.plot(exer$time,exer$exertype,exer$pulse, 
+ylim=c(80,130),lty=c(1,12),ylab="mean of pulse",xlab="time")
+
+exertype.aov<-aov(pulse ~exertype*time + Error(subject), exer)
+summary(exertype.aov)
+
+```
+
+Compare covariance structures
+```{r covariance}
+#compound symmetry
+fit.cs<-gls(pulse ~ diet*time, data=exer, 
+corr=corCompSymm(,form=~1|id))
+summary(fit.cs)
+intervals(fit.cs)
+plot(fit.cs)
+
+plot(fit.cs, id~resid(.), abline=0)
+
+#autoregressive
+fit.ar1<-gls(pulse ~ diet*time, data=longg, 
+corr=corAR1(,form=~1|id))
+summary(fit.ar1)
+
+#Autoregressive with heterogeneous variances
+fit.arh1<-gls(pulse ~ diet*time, data=longg, 
+corr=corAR1(,form=~1|id), weight=varFixed(~time))
+summary(fit.arh1)
+
+#model comparisons
+anova(fit.cs, fit.ar1, fit.arh1)
+```
+
+
+Model 3: time, diet, exertype
+```{r exercisemodel3}
+interaction.plot(exer$time[exer$diet==1], 
+exer$exertype[exer$diet==1], exer$pulse[exer$diet==1],
+ylim=c(80, 150), lty=c(1, 12, 8), ylab="mean of pulse", 
+xlab="time")
+title("Diet=1")
+
+interaction.plot(exer$time[exer$diet==2], 
+exer$exertype[exer$diet==2], exer$pulse[exer$diet==2],
+ylim=c(80, 150), lty=c(1, 12, 8), ylab="mean of pulse", 
+xlab="time")
+title("Diet=2")
+
+longa <- groupedData(pulse~exertype*diet*time|id, data=exer)
+both.arh1 <- gls(pulse ~ exertype*diet*time, 
+data=longg, corr=corAR1(, form= ~ 1 | id), 
+weight=varFixed(~time),  )
+summary(both.arh1)
+
+#contrasts and interactions
+longa <- groupedData(pulse~exertype*diet*time | id, data=exer)
+longa$exertype.f <- factor(longa$exertype, c(1,2,3))
+longa$diet.f <- factor(longa$diet, c(1,2))
+longa$time.f <- factor(longa$time, c(1,2,3))
+
+m <- matrix( c( c(-1/2, 1/2, 0), c(-1/3, -1/3, 2/3) ), ncol=2)
+contrasts(longa$exertype.f) <- m
+contrasts(longa$diet.f) <- c(-1/2, 1/2)
+
+model.cs <- gls(pulse ~ exertype.f*diet.f , 
+data=longa, corr=corCompSymm(, form= ~ 1 | id) )
+summary(model.cs)
+
+
+# other contrasts e.g. difference in mean pulse rate for runners in the two diet groups
+longa$e1d12 <- -1/2*(longa$exertype==1 & longa$diet==1)
+longa$e1d12[longa$exertype==1 & longa$diet==2] <- 1/2
+longa$e2d12 <- -1/2*(longa$exertype==2 & longa$diet==1)
+longa$e2d12[longa$exertype==2 & longa$diet==2] <- 1/2
+longa$e3d12 <- -1/2*(longa$exertype==3 & longa$diet==1)
+longa$e3d12[longa$exertype==3 & longa$diet==2] <- 1/2
+modela.cs <- gls(pulse ~ exertype.f + e1d12+ e2d12+e3d12 , 
+data=longa, corr=corCompSymm(, form= ~ 1 | id) )
+```
+
 
