@@ -29,7 +29,7 @@ library(xtable)
 ```
 
 
-*Much of this code is based on Christophe Lalanne's R Companion to Montgomery's Design and Analysis of Experiements (2005)*
+*Much of this code is based on Christophe Lalanne's R Companion to Montgomery's Design and Analysis of Experiments (2005)*
 
 ## Statistical concepts: Probability distributions
 
@@ -118,7 +118,7 @@ wilcox.test(y~tip,data=hardness,paired=TRUE)
 ## Chapter 3: ANOVA - Comparison of multiple groups
 
 
-**Example**: Unwanted material on silion coated wafers is removed by an etching process. The fiure below visualizes the association of the radio-frequency (RF) power setting with the etch rate.
+**Example**: Unwanted material on silion coated wafers is removed by an etching process. The figure below visualizes the association of the radio-frequency (RF) power setting with the etch rate.
 
 ```{r etchrate}
 etch.rate <- read.table("~/Desktop/Teaching/801/Lectures/Rcode/data/etchrate.txt",header=T)
